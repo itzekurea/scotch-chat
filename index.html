@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Clone UI</title>
+    <style>
+        /* =========================================
+           CSS変数・基本設定
+           ========================================= */
+        :root {
+            --bg-dark-sidebar: #1e1f22;
+            --bg-dark-channels: #2b2d31;
+            --bg-dark-chat: #313338;
+            --bg-dark-input: #383a40;
+            --text-main: #dbdee1;
+            --text-muted: #949ba4;
+            --accent-blue: #5865f2;
+            --accent-green: #23a559;
+            --header-height: 48px;
+            --font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: var(--font-family); color: var(--text-main); background: #000; overflow: hidden; }
+
+        /* =========================================
+           認証画面 (Auth Overlay)
+           ========================================= */
+        #auth-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://unsplash.com') no-repeat center/cover;
+            display: flex; align-items: center; justify-content: center; z-index: 1000;
+        }
+
+        .auth-card {
+            background: #313338; padding: 32px; border-radius: 8px; width: 480px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2); text-align: center;
+        }
+
+        .auth-card h2 { margin-bottom: 8px; font-size: 24px; color: #fff; }
+        .auth-card p { color: var(--text-muted); margin-bottom: 20px; }
+
+        .form-group { text-align: left; margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 12px; font-weight: bold; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; }
+        .form-group input {
+            width: 100%; padding: 10px; border: none; border-radius: 3px;
+            background: #1e1f22; color: #fff; font-size: 16px;
+        }
+
+        .auth-btn {
+            width: 100%; padding: 12px; border: none; border-radius: 3px;
+            background: var(--accent-blue); color: #fff; font-weight: bold; cursor: pointer;
+            margin-top: 10px; transition: 0.2s;
+        }
+        .auth-btn:hover { background: #4752c4; }
+
+        .toggle-auth { margin-top: 15px; font-size: 14px; color: #00a8fc; cursor: pointer; display: inline-block; }
+
+        /* =========================================
+           メインレイアウト (App Layout)
+           ========================================= */
+        #app-container { display: flex; width: 100vw; height: 100vh; visibility: hidden; }
+
+        /* サーバーリスト (一番左) */
+        .server-sidebar {
+            width: 72px; background: var(--bg-dark-sidebar); display: flex; flex-direction: column;
+            align-items: center; padding-top: 12px; gap: 8px;
+        }
+        .server-icon {
+            width: 48px; height: 48px; background: var(--bg-dark-chat); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            transition: 0.2s; position: relative;
+        }
+        .server-icon:hover { border-radius: 30%; background: var(--accent-blue); }
+        .server-icon.active { border-radius: 30%; background: var(--accent-blue); }
+
+        /* チャンネルリスト (中左) */
+        .channels-sidebar {
+            width: 240px; background: var(--bg-dark-channels); display: flex; flex-direction: column;
+        }
+        .channels-header {
+            height: var(--header-height); border-bottom: 1px solid #1e1f22;
+            display: flex; align-items: center; padding: 0 16px; font-weight: bold; font-size: 15px;
+        }
+        .channel-list { padding: 10px 8px; flex-grow: 1; overflow-y: auto; }
+        .channel-item {
+            padding: 6px 8px; border-radius: 4px; color: var(--text-muted); cursor: pointer;
+            display: flex; align-items: center; margin-bottom: 2px;
+        }
+        .channel-item:hover { background: #35373c; color: var(--text-main); }
+        .channel-item.active { background: #3f4147; color: #fff; }
+        .channel-item::before { content: '#'; margin-right: 8px; font-size: 20px; opacity: 0.5; }
+
+        /* チャットエリア (メイン) */
+        .chat-container { flex-grow: 1; background: var(--bg-dark-chat); display: flex; flex-direction: column; }
+        .chat-header {
+            height: var(--header-height); border-bottom: 1px solid #26272b;
+            display: flex; align-items: center; padding: 0 16px; font-weight: bold;
+        }
+
+        .messages-area { flex-grow: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+        .message-group { display: flex; gap: 16px; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #5865f2; }
+        .msg-content { display: flex; flex-direction: column; }
+        .msg-user { font-weight: bold; margin-bottom: 4px; font-size: 16px; }
+        .msg-user span { font-weight: normal; font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+        .msg-text { color: var(--text-main); line-height: 1.4; }
+
+        /* 入力エリア */
+        .chat-input-area { padding: 0 16px 24px 16px; }
+        .input-wrapper {
+            background: var(--bg-dark-input); border-radius: 8px; padding: 11px 16px;
+            display: flex; align-items: center;
+        }
+        .input-wrapper input {
+            background: transparent; border: none; outline: none; color: #fff; width: 100%; font-size: 16px;
+        }
+
+        /* メンバーリスト (一番右) */
+        .member-sidebar { width: 240px; background: var(--bg-dark-channels); padding: 10px 8px; }
+        .member-title { font-size: 12px; font-weight: bold; color: var(--text-muted); margin: 15px 0 5px 8px; text-transform: uppercase; }
+        .member-item { display: flex; align-items: center; gap: 12px; padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+        .member-item:hover { background: #35373c; }
+        .member-avatar { width: 32px; height: 32px; border-radius: 50%; background: #23a559; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- サインイン / 登録画面 -->
+    <div id="auth-overlay">
+        <div class="auth-card" id="login-form">
+            <h2>おかえりなさい！</h2>
+            <p>また会えて嬉しいです！</p>
+            <div class="form-group">
+                <label>メールアドレスまたは電話番号</label>
+                <input type="text" id="login-email">
+            </div>
+            <div class="form-group">
+                <label>パスワード</label>
+                <input type="password" id="login-pass">
+            </div>
+            <button class="auth-btn" onclick="handleLogin()">ログイン</button>
+            <div class="toggle-auth" onclick="toggleAuth()">アカウントが必要ですか？ 登録</div>
+        </div>
+
+        <div class="auth-card hidden" id="register-form">
+            <h2>アカウント作成</h2>
+            <div class="form-group">
+                <label>メールアドレス</label>
+                <input type="email" id="reg-email">
+            </div>
+            <div class="form-group">
+                <label>表示名</label>
+                <input type="text" id="reg-displayname">
+            </div>
+            <div class="form-group">
+                <label>ユーザー名</label>
+                <input type="text" id="reg-user">
+            </div>
+            <div class="form-group">
+                <label>パスワード</label>
+                <input type="password" id="reg-pass">
+            </div>
+            <button class="auth-btn" onclick="handleLogin()">続行</button>
+            <div class="toggle-auth" onclick="toggleAuth()">すでにアカウントをお持ちですか？</div>
+        </div>
+    </div>
+
+    <!-- メインアプリ画面 -->
+    <div id="app-container">
+        <!-- サーバーリスト -->
+        <nav class="server-sidebar">
+            <div class="server-icon active" title="ホーム"><img src="https://website-files.com" width="28"></div>
+            <div style="width: 32px; height: 2px; background: #35373c; margin: 4px 0;"></div>
+            <div class="server-icon" style="background: #e91e63;">G</div>
+            <div class="server-icon" style="background: #9b59b6;">D</div>
+            <div class="server-icon" style="background: #3498db;">+</div>
+        </nav>
+
+        <!-- チャンネルリスト -->
+        <aside class="channels-sidebar">
+            <div class="channels-header">My Discord Server</div>
+            <div class="channel-list">
+                <div class="channel-item active">雑談</div>
+                <div class="channel-item">お知らせ</div>
+                <div class="channel-item">質問・相談</div>
+                <div style="height: 20px;"></div>
+                <div class="member-title">ボイスチャンネル</div>
+                <div class="channel-item" style="display: block;">🔊 一般</div>
+            </div>
+        </aside>
+
+        <!-- チャットメイン -->
+        <main class="chat-container">
+            <header class="chat-header"># 雑談</header>
+            <div class="messages-area" id="msg-flow">
+                <!-- メッセージサンプル -->
+                <div class="message-group">
+                    <div class="avatar" style="background: #faa61a;"></div>
+                    <div class="msg-content">
+                        <div class="msg-user">System Bot <span>今日 18:00</span></div>
+                        <div class="msg-text">このサーバーへようこそ！ここがチャットの始まりです。</div>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <input type="text" id="chat-input" placeholder="#雑談 へメッセージを送信">
+                </div>
+            </div>
+        </main>
+
+        <!-- メンバーリスト -->
+        <aside class="member-sidebar">
+            <div class="member-title">オンライン — 1</div>
+            <div class="member-item">
+                <div class="member-avatar"></div>
+                <div style="font-weight: 500;">あなた (Admin)</div>
+            </div>
+            <div class="member-title">オフライン — 2</div>
+            <div class="member-item" style="opacity: 0.4;">
+                <div class="member-avatar" style="background: #747f8d;"></div>
+                <div>サンプルユーザー1</div>
+            </div>
+            <div class="member-item" style="opacity: 0.4;">
+                <div class="member-avatar" style="background: #747f8d;"></div>
+                <div>サンプルユーザー2</div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // ログイン・登録画面の切り替え
+        function toggleAuth() {
+            document.getElementById('login-form').classList.toggle('hidden');
+            document.getElementById('register-form').classList.toggle('hidden');
+        }
+
+        // ログイン処理（シミュレート）
+        function handleLogin() {
+            const authOverlay = document.getElementById('auth-overlay');
+            const appContainer = document.getElementById('app-container');
+            
+            // アニメーション効果を付けて切り替え
+            authOverlay.style.opacity = '0';
+            setTimeout(() => {
+                authOverlay.style.display = 'none';
+                appContainer.style.visibility = 'visible';
+                appContainer.style.opacity = '1';
+            }, 300);
+        }
+
+        // チャットメッセージの送信処理
+        const chatInput = document.getElementById('chat-input');
+        const msgFlow = document.getElementById('msg-flow');
+
+        chatInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter' && this.value.trim() !== "") {
+                const now = new Date();
+                const timeStr = `今日 ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+                
+                const msgHtml = `
+                    <div class="message-group">
+                        <div class="avatar" style="background: #5865f2;"></div>
+                        <div class="msg-content">
+                            <div class="msg-user">あなた <span>${timeStr}</span></div>
+                            <div class="msg-text">${escapeHTML(this.value)}</div>
+                        </div>
+                    </div>
+                `;
+                
+                msgFlow.insertAdjacentHTML('beforeend', msgHtml);
+                this.value = ""; // 入力欄をクリア
+                msgFlow.scrollTop = msgFlow.scrollHeight; // 最下部へスクロール
+            }
+        });
+
+        // XSS対策：HTMLエスケープ
+        function escapeHTML(str) {
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+            });
+        }
+    </script>
+</body>
+</html>
